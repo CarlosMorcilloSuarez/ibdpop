@@ -10,7 +10,7 @@
 
 __author__  = "Carlos Morcillo-Suarez"
 __license__ = "GPL"
-__version__ = "2019/07/02 17:22" # YYYY/MM/DD HH:MM
+__version__ = "2019/07/08 16:21" # YYYY/MM/DD HH:MM
 __email__   = "carlos.morcillo.upf.edu@gmail.com"
 
 
@@ -22,12 +22,25 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
+
 def show_df(name,df):
     print()
     print('%s (n=%d)' % (name,len(df)))
     display(df.head())
     print('...')
 
+
+def lengthInfoExists():
+    if 'Length' not in IBDs.columns:
+        print()
+        print( "** No Length information present in %s" 
+                % (ibdsFileName))
+        print("** Consider using --impute-length option ")
+        sys.exit(2)
+    else:
+        return(True)
+    
+    
 def processArguments(argv):
     if len(argv) == 0:
         print()
@@ -38,7 +51,8 @@ def processArguments(argv):
         opts, args = getopt.getopt(
                         argv,
                         "",
-                        ["help","version","file=","out=","color-code="]
+                        ["file=","out=","color-code=", 'min-length=',
+                        'impute-length',"min-score="]
         )
     except getopt.GetoptError as e:
         print(e)
@@ -48,12 +62,6 @@ def processArguments(argv):
         ''')
         sys.exit(2)
     for opt, arg in opts:
-        if opt in ("--help"):
-            usage()
-            sys.exit()
-        if opt in ("--version"):
-            print('ibdpop version: '+__version__)
-            sys.exit()
         if opt in ("--file"):
             global dataPrefix
             dataPrefix = arg
@@ -63,7 +71,17 @@ def processArguments(argv):
         if opt in ("--color-code"):
             global colorCode
             colorCode = arg
-            
+        if opt in ("--min-length"):
+            global minLength
+            minLength = int(arg)
+        if opt in ("--impute-length"):
+            global imputeLength
+            imputeLength = True
+        if opt in ("--min-score"):
+            global minScore
+            minScore = int(arg)       
+
+                        
 def usage():
     print('''
         ibdpop
@@ -76,17 +94,20 @@ def usage():
             
         COMMANDS
         
-            matrixcounts       Matrix of the counts of IBDs between all pairs of
-                               individuals
+            version            Shows the current version of the program 
+            
+            help               Shows this help page
+        
+            matrixcounts       Matrix of the counts of IBDs between all pairs
+                               of individuals
+                               
+            quality            Plots scores vs length of IBDs for QC
+            
+            recode             Creates a new dataset applying the current 
+                               filters
             
         
         OPTIONS
-    
-            --version
-                    Shows the current version of the program
-                    
-            --help
-                    Shows this help page
                     
             --file <prefix>
                     Prefix of the files with IBDs (prefix.ibd) and individuals 
@@ -100,11 +121,85 @@ def usage():
                     File containing the color codes for each population to be
                     used in plots.
                     
+            --min-length <length>
+                    Filters out IBD segments shorter of <length> cM
+                    
+            --impute-length
+                    Imputes IBD segments length from chromosomal position 
+                    instead of using provided cM length
+                    
+            -- min-score <score>
+                    Filters out IBD segments with score smaller that <score>
             
     ''')
 
 
-def plotIBDMatrix(IBDs,individuals,countsmatrixFile,
+def plotLengthScore(IBDs,outputPrefix):
+    '''
+       Creates plots to evaluate the quality of the list of IBDs
+    
+       Arguments:       
+       IBDs -- pandas dataframe with all pair of IBD segments to plot
+       outputPrefix -- prefix of the plot output file       
+    '''
+    
+    lenghtHistogramFileName = outputPrefix+'.lhist.png'
+    scoreHistogramFileName = outputPrefix+'.shist.png'
+    lengthsVSscoresFileName = outputPrefix+'.lvs.png'
+            
+    # Length histogram        
+    figure = plt.figure(figsize=(12,8))
+    figure.suptitle("IBDs Length Histogram",fontsize=18)
+    bins=int(max(IBDs.Length))*2
+    color="blue"
+
+    ax = figure.add_subplot(111)
+    ax.hist(IBDs.Length,
+            bins=bins,
+            edgecolor="black")
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    figure.savefig(lenghtHistogramFileName)
+    print('Created file: %s' % (lenghtHistogramFileName))
+    plt.close()
+
+    # Print scores histogram
+    figure = plt.figure(figsize=(12,8))
+    figure.suptitle("IBDs Score Histogram",fontsize=18)
+    bins=int(max(IBDs.Score))
+    color="coral"
+
+    ax = figure.add_subplot(111)
+    ax.hist(IBDs.Score,
+            bins=bins,
+            edgecolor="black",
+            color=color)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    figure.savefig(scoreHistogramFileName)
+    print('Created file: %s' % (scoreHistogramFileName))
+    plt.close()
+
+    # Lengths vs scores plot
+    figure = plt.figure(figsize=(12,8))
+    figure.suptitle("IBDs",fontsize=18)
+    ax = figure.add_subplot(111)
+
+    ax.plot(IBDs.Length,IBDs.Score,"o",
+                markersize = 2)
+    ax.set_xlabel("Length",fontsize=16)
+    ax.set_ylabel("Score",fontsize=16)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    figure.savefig(lengthsVSscoresFileName)
+    print('Created file: %s' % (lengthsVSscoresFileName))    
+    plt.close()
+    
+    
+def plotIBDMatrix(IBDs,individuals,outputPrefix,
                   colorOfPopulation = None,dpi=300):
     '''
        Plots the matrix of IBD numbers shared by all pairs of individuals
@@ -112,7 +207,7 @@ def plotIBDMatrix(IBDs,individuals,countsmatrixFile,
        Arguments:       
        IBDs -- pandas dataframe with all pair of IBD segments to plot
        individuals -- pandas dataframe with population and subpopulation info         
-       countsmatrixFile -- name of the plot output file       
+       outputPrefix -- prefix of the plot output file       
        
        Keyword arguments:             
        colorOfPopulation -- dictionary with the '#aabbcc' color code to use for each
@@ -158,7 +253,6 @@ def plotIBDMatrix(IBDs,individuals,countsmatrixFile,
     fig = plt.figure(figsize = (width,height),
                      dpi=dpi)
     ax = fig.add_subplot(1,1,1)
-
     img = ax.imshow(matrix,
               cmap=cmap,
               vmin=0.0000001)
@@ -192,7 +286,6 @@ def plotIBDMatrix(IBDs,individuals,countsmatrixFile,
                       linewidth = 0.2)
             ax.axvline(index+0.5,
                       linewidth = 0.2)
-
             ax.text(-8,
                     start+1+(index-start)/2,
                     individuals.at[matrix.columns[index],'SubPop'],
@@ -227,7 +320,7 @@ def plotIBDMatrix(IBDs,individuals,countsmatrixFile,
             start+(len(matrix.columns)-start)/2,
             individuals.at[matrix.columns[-1],'Pop'])
 
-    # Colors and names of marks of population 
+    # Colors and names of marks of population print('Created file: %s' % (outputPrefix+'.cmatrix.png'))
     for index in range(len(matrix.columns)):
         color = colorOfPopulation[individuals.at[matrix.columns[index],'Pop']]
         ax.add_patch(
@@ -240,23 +333,34 @@ def plotIBDMatrix(IBDs,individuals,countsmatrixFile,
     ax_colorbar.axis("off")
     fig.colorbar(img,ax=ax_colorbar,shrink = 0.2)     
 
-    fig.savefig(countsmatrixFile)
+    fig.savefig(outputPrefix+'.cmatrix.png')
     
-    print('Created file: %s' % (countsmatrixFile))
+    print('Created file: %s' % (outputPrefix+'.cmatrix.png'))
 
 
+def loadIBDs(ibdsFileName,imputeLength = False):
+    '''
+    Returns a df with the contents of the ibdsFileName.
+    If imputeLength == True, Length is calculated from chromosome positions
+    '''
+    IBDs = pd.read_csv(ibdsFileName,sep='\t')
+    if imputeLength:
+        IBDs["Length"] = (IBDs['End'] - IBDs['Start']) / 1000000
+    return(IBDs)
 
 
 if __name__ == "__main__":
-
+    
     print('ibdpop - Version: %s' % (__version__))
     print('(C) 2019 Carlos Morcillo-Suarez   GPL License')
     print()
 
     # Reads command
-    if len(sys.argv) < 2 or sys.argv[1] not in ['--version',
-                                                '--help',
-                                                'matrixcounts']:
+    if len(sys.argv) < 2 or sys.argv[1] not in ['version',
+                                                'help',
+                                                'matrixcounts',
+                                                'quality',
+                                                'recode']:
         print('No command provided - EXITING')
         usage()
         sys.exit(2)
@@ -267,6 +371,19 @@ if __name__ == "__main__":
     dataPrefix = ""
     outputPrefix = "ibdpop"
     colorCode = ""
+    minLength = 0
+    minScore = 0
+    imputeLength = False
+
+    # version
+    if command == 'version':
+        print('ibdpop version: '+__version__)
+        sys.exit()
+        
+    # help
+    if command == 'help':
+        usage()
+        sys.exit() 
 
     # Process command line
     processArguments(sys.argv[2:])
@@ -280,25 +397,45 @@ if __name__ == "__main__":
 
     # Uploads IBDs
     ibdsFileName = dataPrefix+".ibd"
-    IBDs = pd.read_csv(ibdsFileName,sep='\t')
-    print("Uploaded %d IBDs from %s" 
+    IBDs = loadIBDs(ibdsFileName,imputeLength=imputeLength)
+    print("Uploaded %d IBD segments from %s" 
             % (len(IBDs),
                ibdsFileName) )
-    
+    if minLength > 0:
+        if lengthInfoExists():
+            IBDs = IBDs[IBDs.Length > minLength]
+    if minScore > 0:
+        IBDs = IBDs[IBDs.Score > minScore]
+    print("%d final IBD segments after length and score filters" 
+          % (len(IBDs)))    
+        
     # Uploads color code of populations
     colorOfPopulation = {}
     if colorCode:
         print("Reads color codes from %s" % (colorCode))
         for index, row in pd.read_csv(colorCode,sep='\t').iterrows():
             colorOfPopulation[row.Population] = row.Color
-        
-    plotIBDMatrix(IBDs,
-                  individuals,
-                  outputPrefix+'.png',
-                  colorOfPopulation = colorOfPopulation)
+   
+   
+    # COMMANDS ---------------------------------------
+    # matrixcounts       
+    if command == 'matrixcounts': 
+        plotIBDMatrix(IBDs,
+                      individuals,
+                      outputPrefix,
+                      colorOfPopulation = colorOfPopulation)
                       
-    
-    
+    # quality          
+    elif command == 'quality':
+        if lengthInfoExists():
+            plotLengthScore(IBDs, outputPrefix)
+        
+    # recode
+    elif command == 'recode':
+        IBDs.to_csv(outputPrefix+'.ibd', sep='\t', index = False)
+        print('Created file: %s' % (outputPrefix+'.ibd'))    
+        individuals.to_csv(outputPrefix+'.ind', sep='\t')
+        print('Created file: %s' % (outputPrefix+'.ind'))    
     
     
     
