@@ -42,6 +42,10 @@ ibdpop
                     Imputes IBD segments length from chromosomal position 
                     instead of using provided cM length
                     
-            -- min-score <score>
+            --min-score <score>
                     Filters out IBD segments with score smaller that <score>
+                    
+            --dpi <dpi>
+                    dpi (dots per inch) to be used plots
+                    Default = 100
             
