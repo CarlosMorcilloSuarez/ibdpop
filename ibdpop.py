@@ -10,7 +10,7 @@
 
 __author__  = "Carlos Morcillo-Suarez"
 __license__ = "GPL"
-__version__ = "2019/07/08 16:21" # YYYY/MM/DD HH:MM
+__version__ = "2019/10/04 11:28" # YYYY/MM/DD HH:MM
 __email__   = "carlos.morcillo.upf.edu@gmail.com"
 
 
@@ -52,7 +52,7 @@ def processArguments(argv):
                         argv,
                         "",
                         ["file=","out=","color-code=", 'min-length=',
-                        'impute-length',"min-score="]
+                        'impute-length',"min-score=","dpi="]
         )
     except getopt.GetoptError as e:
         print(e)
@@ -80,7 +80,9 @@ def processArguments(argv):
         if opt in ("--min-score"):
             global minScore
             minScore = int(arg)       
-
+        if opt in ("--dpi"):
+            global dpi
+            dpi = int(arg)
                         
 def usage():
     print('''
@@ -125,16 +127,20 @@ def usage():
                     Filters out IBD segments shorter of <length> cM
                     
             --impute-length
-                    Imputes IBD segments length from chromosomal position 
+                    Imputes IBD segments length from chromosomal position
                     instead of using provided cM length
                     
-            -- min-score <score>
+            --min-score <score>
                     Filters out IBD segments with score smaller that <score>
+                    
+            --dpi <dpi>
+                    dpi (dots per inch) to be used plots
+                    Default = 100
             
     ''')
 
 
-def plotLengthScore(IBDs,outputPrefix):
+def plotLengthScore(IBDs,outputPrefix,dpi):
     '''
        Creates plots to evaluate the quality of the list of IBDs
     
@@ -148,7 +154,7 @@ def plotLengthScore(IBDs,outputPrefix):
     lengthsVSscoresFileName = outputPrefix+'.lvs.png'
             
     # Length histogram        
-    figure = plt.figure(figsize=(12,8))
+    figure = plt.figure(figsize=(12,8),dpi=dpi)
     figure.suptitle("IBDs Length Histogram",fontsize=18)
     bins=int(max(IBDs.Length))*2
     color="blue"
@@ -165,7 +171,7 @@ def plotLengthScore(IBDs,outputPrefix):
     plt.close()
 
     # Print scores histogram
-    figure = plt.figure(figsize=(12,8))
+    figure = plt.figure(figsize=(12,8),dpi=dpi)
     figure.suptitle("IBDs Score Histogram",fontsize=18)
     bins=int(max(IBDs.Score))
     color="coral"
@@ -183,7 +189,7 @@ def plotLengthScore(IBDs,outputPrefix):
     plt.close()
 
     # Lengths vs scores plot
-    figure = plt.figure(figsize=(12,8))
+    figure = plt.figure(figsize=(12,8),dpi=dpi)
     figure.suptitle("IBDs",fontsize=18)
     ax = figure.add_subplot(111)
 
@@ -374,6 +380,7 @@ if __name__ == "__main__":
     minLength = 0
     minScore = 0
     imputeLength = False
+    dpi = 100
 
     # version
     if command == 'version':
@@ -423,12 +430,13 @@ if __name__ == "__main__":
         plotIBDMatrix(IBDs,
                       individuals,
                       outputPrefix,
-                      colorOfPopulation = colorOfPopulation)
+                      colorOfPopulation = colorOfPopulation,
+                      dpi=dpi)
                       
     # quality          
     elif command == 'quality':
         if lengthInfoExists():
-            plotLengthScore(IBDs, outputPrefix)
+            plotLengthScore(IBDs, outputPrefix,dpi)
         
     # recode
     elif command == 'recode':
